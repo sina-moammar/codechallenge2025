@@ -1,0 +1,93 @@
+# .github/workflows/test-challenge.yml
+name: Test Participant Solution
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened ]
+
+jobs:
+  test-challenge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Create data directory
+        run: mkdir -p data
+
+      - name: Run challenge test
+        id: test
+        run: make test
+
+      - name: Extract results from GITHUB_OUTPUT
+        id: results
+        run: |
+          echo "time=$(grep '^time=' $GITHUB_OUTPUT | cut -d= -f2)" >> $GITHUB_OUTPUT
+          echo "accuracy=$(grep '^accuracy=' $GITHUB_OUTPUT | cut -d= -f2)" >> $GITHUB_OUTPUT
+          echo "correct=$(grep '^correct=' $GITHUB_OUTPUT | cut -d= -f2)" >> $GITHUB_OUTPUT
+          echo "score=$(grep '^score=' $GITHUB_OUTPUT | cut -d= -f2)" >> $GITHUB_OUTPUT
+
+      - name: Update Leaderboard
+        if: success()
+        env:
+          GH_USERNAME: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          TIME: ${{ steps.results.outputs.time }}
+          ACCURACY: ${{ steps.results.outputs.accuracy }}
+          CORRECT: ${{ steps.results.outputs.correct }}
+          SCORE: ${{ steps.results.outputs.score }}
+        run: make leaderboard
+
+      - name: Commit and push updated leaderboard & data
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Leaderboard.md leaderboard.json data/*.csv
+          git diff --staged --quiet && echo "No changes to commit" || \
+            (git commit -m "Update leaderboard and dataset [skip ci]" && git push)
+
+      - name: Comment results on Pull Request
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const rawTime = "${{ steps.results.outputs.time }}";
+            const rawAccuracy = parseFloat("${{ steps.results.outputs.accuracy }}");
+            const correct = "${{ steps.results.outputs.correct }}";
+            const score = "${{ steps.results.outputs.score }}";
+
+            const time = parseFloat(rawTime).toFixed(2);
+            const accuracyPercent = (rawAccuracy * 100).toFixed(1);
+
+            let body = `## 🧬 #codechallenge2025 Results
+
+            ⏱️ **Execution Time**: ${time} seconds  
+            ✅ **Correct Matches**: ${correct}/35  
+            📊 **Accuracy**: ${accuracyPercent}%  
+            🏆 **Final Score**: ${score}/120
+
+            🔗 View the live **[Leaderboard here](https://github.com/${{ github.repository }}/blob/main/Leaderboard.md)**
+
+            Thank you for participating! Keep optimizing — real forensic cases are counting on yours. 🧬`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            })

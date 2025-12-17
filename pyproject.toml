@@ -1,0 +1,20 @@
+[project]
+name = "codechallenge2025"
+version = "0.1.0"
+description = "PyDay2025: Forensic STR Parent-Child Relationship Detector Challenge: Scalable kinship search in large DNA datasets using Short Tandem Repeats"
+readme = "README.md"
+authors = [
+    { name = "Ali Tavallaie", email = "a.tavallaie@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.3.5",
+    "pandas>=2.3.3",
+]
+
+[project.scripts]
+codechallenge2025 = "codechallenge2025:main"
+
+[build-system]
+requires = ["uv_build>=0.8.15,<0.9.0"]
+build-backend = "uv_build"
